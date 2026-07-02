@@ -49,6 +49,7 @@ public class TodoController : ControllerBase
         
         item.Title = newItem.Title;
         item.Iscomplete = newItem.Iscomplete;
+        item.Description = newItem.Description;
         await _db.SaveChangesAsync();
         return NoContent();
     }
