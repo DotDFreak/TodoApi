@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 using TodoApi.Models;
 using TodoApi.Data;
@@ -10,17 +11,28 @@ namespace TodoApi.Controllers;
 [Route("api/[controller]")]
 public class TodoController : ControllerBase
 {
-    private readonly TodoDbContext _db;
+    const string cacheKey = "TodoItemsCacheKey";
 
-    public TodoController(TodoDbContext db)
+    private readonly TodoDbContext _db;
+    private readonly IMemoryCache _cache;
+
+    public TodoController(TodoDbContext db, IMemoryCache cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TodoItem>>> GetAll()
     {
-        return Ok(await _db.TodoItems.ToListAsync());
+        if(!_cache.TryGetValue(cacheKey, out List<TodoItem>? cachedItems))
+        {
+            cachedItems = await _db.TodoItems.ToListAsync();
+
+            _cache.Set(cacheKey, cachedItems, TimeSpan.FromMinutes(5));
+        }
+
+        return Ok(cachedItems);
     }
 
     [HttpGet("{id}")]
@@ -35,6 +47,7 @@ public class TodoController : ControllerBase
     {
         _db.TodoItems.Add(item);
         await _db.SaveChangesAsync();
+        _cache.Remove("TodoItemsCacheKey");
         return CreatedAtAction(nameof(GetById), new {id = item.Id}, item);
     }
 
@@ -51,6 +64,7 @@ public class TodoController : ControllerBase
         item.Iscomplete = newItem.Iscomplete;
         item.Description = newItem.Description;
         await _db.SaveChangesAsync();
+        _cache.Remove("TodoItemsCacheKey");
         return NoContent();
     }
 
@@ -65,6 +79,7 @@ public class TodoController : ControllerBase
 
         _db.TodoItems.Remove(item);
         await _db.SaveChangesAsync();
+        _cache.Remove("TodoItemsCacheKey");
         return NoContent();
     }
 }
